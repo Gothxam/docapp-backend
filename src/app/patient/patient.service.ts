@@ -111,14 +111,14 @@ export class PatientService {
       });
   
       if (!patient) {
-        throw new NotFoundException('Doctor not found');
+        throw new NotFoundException('Patient not found');
       }
   
-      const imagePath = `/uploads/patients/${file.filename}`;
-  
-      patient.profilePicture = file.filename;
+      const imagePath = file.filename;
+
+      patient.profilePicture = imagePath;
       await patient.save();
-  
+
       return {
         message: 'Profile picture uploaded successfully',
         profilePicture: imagePath,
