@@ -8,7 +8,7 @@ import { DoctorModule } from './app/doctor/doctor.module';
 import { PatientModule } from './app/patient/patient.module';
 import { ReviewModule } from './app/review/review.module';
 import { AuthModule } from './app/auth/auth.module';
-import { AppointmentModule } from './app/appointment/appointment.module';
+import { AppointmentModule } from './app/apoointment/appointment.module';
 
 
 @Module({

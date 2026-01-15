@@ -92,7 +92,7 @@ export class DoctorService {
   return {
     ...doctor,
     profilePicture: doctor.profilePicture
-      ? `http://localhost:5678/uploads/doctors/${doctor.profilePicture}`
+      ? `${process.env.BACKEND_URL}/uploads/doctors/${doctor.profilePicture}`
       : null,
   };
 }
