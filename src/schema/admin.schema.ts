@@ -15,7 +15,7 @@ export class Admin {
   @Prop({ required: true, select: false })
   password: string;
 
-  @Prop({ default: 'admin' })
+  @Prop({ default: 'admin1' })
   role: string;
 
   @Prop({required:false})
