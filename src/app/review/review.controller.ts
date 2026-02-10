@@ -26,6 +26,7 @@ export class ReviewController {
   @Post()
   @ApiOperation({ summary: 'Patient creates a review for a doctor' })
   create(@Body() dto: CreateReviewDto) {
+     console.log("DTO RECEIVED:", dto)
     return this.reviewService.createReview(dto);
   }
 

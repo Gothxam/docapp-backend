@@ -5,6 +5,7 @@ import { Patient, PatientDocument } from '../../schema/patient.schema';
 import { CreatePatientDto, UpdatePatientProfileDto } from './patient.dto';
 import * as bcrypt from 'bcrypt';
 import { ConflictException } from '@nestjs/common';
+import cloudinary from "../../config/cloudinary.config";
 
 @Injectable()
 export class PatientService {
@@ -96,32 +97,50 @@ export class PatientService {
   }
 
   // UPLOAD PROFILE PICTURE
-  async uploadProfilePicture(
-    patientId: string,
-    file: Express.Multer.File,
-    ): Promise<{ message: string; profilePicture: string }> {
-  
-      if (!Types.ObjectId.isValid(patientId)) {
-        throw new BadRequestException('Invalid patient id');
-      }
-  
-      const patient = await this.patientModel.findOne({
-        _id: patientId,
-        isDeleted: false,
-      });
-  
-      if (!patient) {
-        throw new NotFoundException('Patient not found');
-      }
-  
-      const imagePath = file.filename;
+async uploadProfilePicture(
+  patientId: string,
+  file: Express.Multer.File,
+): Promise<{ message: string; profilePicture: string }> {
 
-      patient.profilePicture = imagePath;
-      await patient.save();
-
-      return {
-        message: 'Profile picture uploaded successfully',
-        profilePicture: imagePath,
-      };
-    }
+  if (!file) {
+    throw new BadRequestException("Profile image is required");
   }
+
+  if (!Types.ObjectId.isValid(patientId)) {
+    throw new BadRequestException("Invalid patient id");
+  }
+
+  const patient = await this.patientModel.findOne({
+    _id: patientId,
+    isDeleted: false,
+  });
+
+  if (!patient) {
+    throw new NotFoundException("Patient not found");
+  }
+
+  // 🔥 Convert buffer → base64
+  const base64 = file.buffer.toString("base64");
+  const dataUri = `data:${file.mimetype};base64,${base64}`;
+
+  // 🔥 Upload to Cloudinary
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder: "patients/profile",
+    resource_type: "image",
+    transformation: [
+      { width: 400, height: 400, crop: "fill" },
+      { quality: "auto" },
+      { fetch_format: "auto" },
+    ],
+  });
+
+  patient.profilePicture = result.secure_url;
+  await patient.save();
+
+  return {
+    message: "Profile picture uploaded successfully",
+    profilePicture: result.secure_url,
+  };
+}
+
+}

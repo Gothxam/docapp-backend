@@ -97,37 +97,30 @@ update(
   }
 
   // UPLOAD PROFILE PICTURE
-   @UseGuards(JwtAuthGuard)
-  @Post('upload-profile-picture')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/patients',
-        filename: (req :any, file, cb) => {
-          const uniqueName =
-            `patient-${req.user.id}-${Date.now()}${extname(file.originalname)}`;
-          cb(null, uniqueName);
-        },
-      }),
-      limits: {
-        fileSize: 2 * 1024 * 1024, // 2MB
-      },
-      fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-          cb(new BadRequestException('Only JPG/PNG allowed'), false);
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  uploadProfilePicture(
-    @Req() req:any,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    if (!file) {
-      throw new BadRequestException('File not uploaded');
-    }
-
-    return this.patientService.uploadProfilePicture(req.user.id, file);
+ @UseGuards(JwtAuthGuard)
+@Post('upload-profile-picture')
+@UseInterceptors(
+  FileInterceptor('file', {
+    limits: {
+      fileSize: 2 * 1024 * 1024, // 2MB
+    },
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+        cb(new BadRequestException('Only JPG/PNG allowed'), false);
+      }
+      cb(null, true);
+    },
+  }),
+)
+uploadProfilePicture(
+  @Req() req: any,
+  @UploadedFile() file: Express.Multer.File,
+) {
+  if (!file) {
+    throw new BadRequestException('File not uploaded');
   }
+
+  return this.patientService.uploadProfilePicture(req.user.id, file);
+}
+
 }

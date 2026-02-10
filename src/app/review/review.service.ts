@@ -19,7 +19,7 @@ export class ReviewService {
     private readonly doctorModel: Model<DoctorDocument>,
   ) {}
 
-  // 🔹 CREATE REVIEW & SAVE REVIEW ID IN DOCTOR
+  //CREATE REVIEW & SAVE REVIEW ID IN DOCTOR
   async createReview(dto: CreateReviewDto) {
     const doctorId = new Types.ObjectId(dto.doctorId);
     const patientId = new Types.ObjectId(dto.patientId);
@@ -41,6 +41,7 @@ export class ReviewService {
       patient: patientId,
       rating: dto.rating,
       comment: dto.comment,
+      isApproved:true
     });
 
     // push review id into doctor

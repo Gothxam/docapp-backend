@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { Doctor, DoctorDocument } from '../../schema/doctor.schema';
 import { CreateDoctorDto, UpdateDoctorAdminDto,  UpdateDoctorProfileDto } from './doctor.dto';
 import { ConflictException } from '@nestjs/common';
+  import cloudinary from '../../config/cloudinary.config';
 
 
 
@@ -134,34 +135,53 @@ export class DoctorService {
   }
 
   // ================= UPLOAD PROFILE PICTURE =================
-  async uploadProfilePicture(
+
+async uploadProfilePicture(
   doctorId: string,
   file: Express.Multer.File,
-  ): Promise<{ message: string; profilePicture: string }> {
+): Promise<{ message: string; profilePicture: string }> {
 
-    if (!Types.ObjectId.isValid(doctorId)) {
-      throw new BadRequestException('Invalid doctor id');
-    }
-
-    const doctor = await this.doctorModel.findOne({
-      _id: doctorId,
-      isDeleted: false,
-    });
-
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
-    }
-
-    const imagePath = `/uploads/doctors/${file.filename}`;
-
-    doctor.profilePicture = file.filename;
-    await doctor.save();
-
-    return {
-      message: 'Profile picture uploaded successfully',
-      profilePicture: imagePath,
-    };
+  if (!file) {
+    throw new BadRequestException("Profile image is required");
   }
+
+  if (!Types.ObjectId.isValid(doctorId)) {
+    throw new BadRequestException("Invalid doctor id");
+  }
+
+  const doctor = await this.doctorModel.findOne({
+    _id: doctorId,
+    isDeleted: false,
+  });
+
+  if (!doctor) {
+    throw new NotFoundException("Doctor not found");
+  }
+
+  // Convert buffer → base64
+  const base64 = file.buffer.toString("base64");
+  const dataUri = `data:${file.mimetype};base64,${base64}`;
+
+  // Upload to Cloudinary
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder: "doctors/profile",
+    resource_type: "image",
+    transformation: [
+      { width: 400, height: 400, crop: "fill" },
+      { quality: "auto" },
+      { fetch_format: "auto" },
+    ],
+  });
+
+  doctor.profilePicture = result.secure_url;
+  await doctor.save();
+
+  return {
+    message: "Profile picture uploaded successfully",
+    profilePicture: result.secure_url,
+  };
+}
+
 
   // ================= ADMIN UPDATE =================
 async update(
