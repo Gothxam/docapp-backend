@@ -1,3 +1,4 @@
+import type { Express } from 'express';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import cloudinary from '../config/cloudinary.config';
 

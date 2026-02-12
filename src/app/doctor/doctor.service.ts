@@ -1,3 +1,4 @@
+import type { Express } from 'express';
 import {
   Injectable,
   NotFoundException,
@@ -9,7 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { Doctor, DoctorDocument } from '../../schema/doctor.schema';
 import { CreateDoctorDto, UpdateDoctorAdminDto,  UpdateDoctorProfileDto } from './doctor.dto';
 import { ConflictException } from '@nestjs/common';
-  import cloudinary from '../../config/cloudinary.config';
+import cloudinary from '../../config/cloudinary.config';
 
 
 
