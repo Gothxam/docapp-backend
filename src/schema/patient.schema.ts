@@ -37,6 +37,9 @@ export class Patient {
   profilePicture: string;
 
   @Prop()
+  profilePicturePublicId: string;
+
+  @Prop()
   healthIssues: string;
 
   @Prop()

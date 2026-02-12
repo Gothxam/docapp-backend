@@ -97,50 +97,88 @@ export class PatientService {
   }
 
   // UPLOAD PROFILE PICTURE
-async uploadProfilePicture(
-  patientId: string,
-  file: Express.Multer.File,
-): Promise<{ message: string; profilePicture: string }> {
+  async uploadProfilePicture(
+    patientId: string,
+    file: Express.Multer.File,
+  ): Promise<{ message: string; profilePicture: string; publicId: string }> {
+    console.log('\n=== UPLOAD DEBUG ===');
+    console.log('File received:', {
+      fieldname: file?.fieldname,
+      originalname: file?.originalname,
+      encoding: file?.encoding,
+      mimetype: file?.mimetype,
+      size: file?.size,
+      hasBuffer: !!file?.buffer,
+      bufferLength: file?.buffer?.length,
+    });
 
-  if (!file) {
-    throw new BadRequestException("Profile image is required");
+    if (!file) {
+      throw new BadRequestException('Profile image is required');
+    }
+
+    if (!file.buffer) {
+      throw new BadRequestException('File buffer missing - storage not configured correctly');
+    }
+
+    if (!Types.ObjectId.isValid(patientId)) {
+      throw new BadRequestException('Invalid patient id');
+    }
+
+    const patient = await this.patientModel.findOne({
+      _id: patientId,
+      isDeleted: false,
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    try {
+      // 🔥 Convert buffer → base64
+      const base64 = file.buffer.toString('base64');
+      const dataUri = `data:${file.mimetype};base64,${base64}`;
+
+      console.log('Uploading to Cloudinary...');
+
+      // 🔥 Delete old image from Cloudinary if exists
+      if (patient.profilePicturePublicId) {
+        try {
+          await cloudinary.uploader.destroy(patient.profilePicturePublicId);
+        } catch (err) {
+          console.warn(
+            `Warning: Failed to delete old profile picture: ${err.message}`,
+          );
+        }
+      }
+
+      // 🔥 Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(dataUri, {
+        folder: 'patients/profile',
+        resource_type: 'image',
+        transformation: [
+          { width: 400, height: 400, crop: 'fill' },
+          { quality: 'auto' },
+          { fetch_format: 'auto' },
+        ],
+      });
+
+      console.log('Cloudinary upload successful:', result.secure_url);
+
+      patient.profilePicture = result.secure_url;
+      patient.profilePicturePublicId = result.public_id;
+      await patient.save();
+
+      return {
+        message: 'Profile picture uploaded successfully',
+        profilePicture: result.secure_url,
+        publicId: result.public_id,
+      };
+    } catch (error) {
+      console.error('Cloudinary upload error:', error);
+      throw new BadRequestException(
+        `Failed to upload profile picture: ${error.message}`,
+      );
+    }
   }
-
-  if (!Types.ObjectId.isValid(patientId)) {
-    throw new BadRequestException("Invalid patient id");
-  }
-
-  const patient = await this.patientModel.findOne({
-    _id: patientId,
-    isDeleted: false,
-  });
-
-  if (!patient) {
-    throw new NotFoundException("Patient not found");
-  }
-
-  // 🔥 Convert buffer → base64
-  const base64 = file.buffer.toString("base64");
-  const dataUri = `data:${file.mimetype};base64,${base64}`;
-
-  // 🔥 Upload to Cloudinary
-  const result = await cloudinary.uploader.upload(dataUri, {
-    folder: "patients/profile",
-    resource_type: "image",
-    transformation: [
-      { width: 400, height: 400, crop: "fill" },
-      { quality: "auto" },
-      { fetch_format: "auto" },
-    ],
-  });
-
-  patient.profilePicture = result.secure_url;
-  await patient.save();
-
-  return {
-    message: "Profile picture uploaded successfully",
-    profilePicture: result.secure_url,
-  };
-}
 
 }

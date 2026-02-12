@@ -15,12 +15,13 @@ import {
   Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Express } from 'express';
 import { PatientService } from './patient.service';
 import { CreatePatientDto, UpdatePatientProfileDto } from './patient.dto';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+
 
 @ApiTags("Patients")
 @Controller('patient')
@@ -34,6 +35,7 @@ import { extname } from 'path';
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
   // ============== Get own profile (protected) ==============
+  @ApiBearerAuth()
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   getOwnProfile(@Req() req) {
@@ -63,6 +65,7 @@ export class PatientController {
   }
 
   // ================= OWN PROFILE =================
+@ApiBearerAuth()
 @Patch('profile')
 @UseGuards(JwtAuthGuard)
 updateOwnProfile(
@@ -97,30 +100,57 @@ update(
   }
 
   // UPLOAD PROFILE PICTURE
- @UseGuards(JwtAuthGuard)
-@Post('upload-profile-picture')
-@UseInterceptors(
-  FileInterceptor('file', {
-    limits: {
-      fileSize: 2 * 1024 * 1024, // 2MB
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('upload-profile-picture')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload profile picture (JPG/PNG, max 2MB)',
+    type: 'multipart/form-data',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Profile picture file (JPG/PNG)',
+        },
+      },
+      required: ['file'],
     },
-    fileFilter: (req, file, cb) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-        cb(new BadRequestException('Only JPG/PNG allowed'), false);
-      }
-      cb(null, true);
-    },
-  }),
-)
-uploadProfilePicture(
-  @Req() req: any,
-  @UploadedFile() file: Express.Multer.File,
-) {
-  if (!file) {
-    throw new BadRequestException('File not uploaded');
-  }
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 2 * 1024 * 1024, // 2MB
+      },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          cb(new BadRequestException('Only JPG/PNG allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadProfilePicture(
+    @Req() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    console.log('📤 Patient upload endpoint hit');
+    console.log('File object:', {
+      fieldname: file?.fieldname,
+      originalname: file?.originalname,
+      hasBuffer: !!file?.buffer,
+      destination: (file as any)?.destination,
+      filename: (file as any)?.filename,
+    });
 
-  return this.patientService.uploadProfilePicture(req.user.id, file);
-}
+    if (!file) {
+      throw new BadRequestException('File not uploaded');
+    }
+
+    return this.patientService.uploadProfilePicture(req.user.id, file);
+  }
 
 }

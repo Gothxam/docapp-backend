@@ -68,11 +68,20 @@ export class DoctorService {
 // }
 
   // ================= READ ALL =================
-  async findAll(): Promise<Doctor[]> {
-    return this.doctorModel
+  async findAll(): Promise<any[]> {
+    const doctors = await this.doctorModel
       .find({ isDeleted: false })
       .select('-password')
+      .lean()
       .exec();
+
+    // Transform profilePicture URLs
+    return doctors.map(doctor => ({
+      ...doctor,
+      profilePicture: doctor.profilePicture?.startsWith('http') 
+        ? doctor.profilePicture 
+        : null,
+    }));
   }
 
   // ================= READ ONE =================
@@ -90,11 +99,21 @@ export class DoctorService {
     throw new NotFoundException('Doctor not found');
   }
 
+  // Handle both Cloudinary URLs and old local filenames
+  let profilePicture: string | null = null;
+  if (doctor.profilePicture) {
+    // If already a full URL (from Cloudinary), return as-is
+    if (doctor.profilePicture.startsWith('http')) {
+      profilePicture = doctor.profilePicture;
+    } else {
+      // Old local filename - skip for now (files don't exist)
+      profilePicture = null;
+    }
+  }
+
   return {
     ...doctor,
-    profilePicture: doctor.profilePicture
-      ? `${process.env.BACKEND_URL}/uploads/doctors/${doctor.profilePicture}`
-      : null,
+    profilePicture,
   };
 }
 
@@ -135,52 +154,90 @@ export class DoctorService {
   }
 
   // ================= UPLOAD PROFILE PICTURE =================
+  async uploadProfilePicture(
+    doctorId: string,
+    file: Express.Multer.File,
+  ): Promise<{ message: string; profilePicture: string; publicId: string }> {
+    console.log('\n=== UPLOAD DEBUG ===');
+    console.log('File received:', {
+      fieldname: file?.fieldname,
+      originalname: file?.originalname,
+      encoding: file?.encoding,
+      mimetype: file?.mimetype,
+      size: file?.size,
+      hasBuffer: !!file?.buffer,
+      bufferLength: file?.buffer?.length,
+    });
 
-async uploadProfilePicture(
-  doctorId: string,
-  file: Express.Multer.File,
-): Promise<{ message: string; profilePicture: string }> {
+    if (!file) {
+      throw new BadRequestException('Profile image is required');
+    }
 
-  if (!file) {
-    throw new BadRequestException("Profile image is required");
+    if (!file.buffer) {
+      throw new BadRequestException('File buffer missing - storage not configured correctly');
+    }
+
+    if (!Types.ObjectId.isValid(doctorId)) {
+      throw new BadRequestException('Invalid doctor id');
+    }
+
+    const doctor = await this.doctorModel.findOne({
+      _id: doctorId,
+      isDeleted: false,
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    try {
+      // 🔥 Convert buffer → base64
+      const base64 = file.buffer.toString('base64');
+      const dataUri = `data:${file.mimetype};base64,${base64}`;
+
+      console.log('Uploading to Cloudinary...');
+
+      // 🔥 Delete old image from Cloudinary if exists
+      if (doctor.profilePicturePublicId) {
+        try {
+          await cloudinary.uploader.destroy(doctor.profilePicturePublicId);
+        } catch (err) {
+          console.warn(
+            `Warning: Failed to delete old profile picture: ${err.message}`,
+          );
+          // Don't throw error, continue with upload
+        }
+      }
+
+      // 🔥 Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(dataUri, {
+        folder: 'doctors/profile',
+        resource_type: 'image',
+        transformation: [
+          { width: 400, height: 400, crop: 'fill' },
+          { quality: 'auto' },
+          { fetch_format: 'auto' },
+        ],
+      });
+
+      console.log('Cloudinary upload successful:', result.secure_url);
+
+      doctor.profilePicture = result.secure_url;
+      doctor.profilePicturePublicId = result.public_id;
+      await doctor.save();
+
+      return {
+        message: 'Profile picture uploaded successfully',
+        profilePicture: result.secure_url,
+        publicId: result.public_id,
+      };
+    } catch (error) {
+      console.error('Cloudinary upload error:', error);
+      throw new BadRequestException(
+        `Failed to upload profile picture: ${error.message}`,
+      );
+    }
   }
-
-  if (!Types.ObjectId.isValid(doctorId)) {
-    throw new BadRequestException("Invalid doctor id");
-  }
-
-  const doctor = await this.doctorModel.findOne({
-    _id: doctorId,
-    isDeleted: false,
-  });
-
-  if (!doctor) {
-    throw new NotFoundException("Doctor not found");
-  }
-
-  // Convert buffer → base64
-  const base64 = file.buffer.toString("base64");
-  const dataUri = `data:${file.mimetype};base64,${base64}`;
-
-  // Upload to Cloudinary
-  const result = await cloudinary.uploader.upload(dataUri, {
-    folder: "doctors/profile",
-    resource_type: "image",
-    transformation: [
-      { width: 400, height: 400, crop: "fill" },
-      { quality: "auto" },
-      { fetch_format: "auto" },
-    ],
-  });
-
-  doctor.profilePicture = result.secure_url;
-  await doctor.save();
-
-  return {
-    message: "Profile picture uploaded successfully",
-    profilePicture: result.secure_url,
-  };
-}
 
 
   // ================= ADMIN UPDATE =================

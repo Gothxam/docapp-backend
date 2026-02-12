@@ -52,6 +52,9 @@ export class Doctor {
   @Prop({ required: false })
   profilePicture: string;
 
+  @Prop({ required: false })
+  profilePicturePublicId: string;
+
   @Prop({required:false})
   fee:string
 

@@ -15,7 +15,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 import { DoctorService } from './doctor.service';
 import {
@@ -25,8 +25,8 @@ import {
 } from './doctor.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
+import type { Express } from 'express';
 
 @ApiTags('Doctor')
 @Controller('doctor')
@@ -104,32 +104,57 @@ console.log('DTO BODY:', updateDoctorDto)
   }
 
   // ================= PROFILE PICTURE =================
- 
-  
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-@Post('upload-profile-picture')
-@UseInterceptors(
-  FileInterceptor('file', {
-    limits: {
-      fileSize: 2 * 1024 * 1024, // 2MB
+  @Post('upload-profile-picture')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload profile picture (JPG/PNG, max 2MB)',
+    type: 'multipart/form-data',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Profile picture file (JPG/PNG)',
+        },
+      },
+      required: ['file'],
     },
-    fileFilter: (req, file, cb) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-        cb(new BadRequestException('Only JPG/PNG allowed'), false);
-      }
-      cb(null, true);
-    },
-  }),
-)
-uploadProfilePicture(
-  @Req() req: any,
-  @UploadedFile() file: Express.Multer.File,
-) {
-  if (!file) {
-    throw new BadRequestException('File not uploaded');
-  }
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 2 * 1024 * 1024, // 2MB
+      },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          cb(new BadRequestException('Only JPG/PNG allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadProfilePicture(
+    @Req() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    console.log('📤 Doctor upload endpoint hit');
+    console.log('File object:', {
+      fieldname: file?.fieldname,
+      originalname: file?.originalname,
+      hasBuffer: !!file?.buffer,
+      destination: (file as any)?.destination,
+      filename: (file as any)?.filename,
+    });
 
-  return this.doctorService.uploadProfilePicture(req.user.id, file);
-}
+    if (!file) {
+      throw new BadRequestException('File not uploaded');
+    }
+
+    return this.doctorService.uploadProfilePicture(req.user.id, file);
+  }
 
 }
